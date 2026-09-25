@@ -86,6 +86,11 @@ node server/index.js
 
 ---
 
+[点击投喂](https://afdian.com/a/StarlightJUE)
+我一定给它搓一个GUI awa
+
+---
+
 ## 安全须知与免责声明
 
 1. **严禁接触危险部位**：严禁将电极贴附于**胸部、心脏前区、颈部、头部或粘膜伤口处**。
