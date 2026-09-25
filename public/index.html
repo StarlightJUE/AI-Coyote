@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>DG-Lab Coyote 智能控制终端</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ================= 一级页面：配对连接页 ================= -->
+  <div class="view-screen active" id="view-connect">
+    <div class="connect-wrapper">
+      <div class="connect-header">
+        <div class="connect-title">
+          <span>⚡ DG-LAB Coyote 3.0</span>
+        </div>
+      </div>
+
+      <!-- 协议选择 -->
+      <div class="proto-tabs">
+        <button class="proto-tab-btn active" id="protoV4Btn" onclick="switchProto('v4')">V4</button>
+        <button class="proto-tab-btn" id="protoV3Btn" onclick="switchProto('v3')">V3</button>
+      </div>
+
+      <!-- 二维码卡片 -->
+      <div class="qr-box-inner" id="qrcodeBox">
+        <div style="color: #888; font-size: 13px;">正在生成配对二维码...</div>
+      </div>
+
+      <!-- 手动刷新二维码控制区 -->
+      <div style="margin-bottom: 14px; width: 100%;">
+        <button class="btn-sm" style="width: 100%; padding: 8px 12px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; background: #1b1d28; border: 1px solid #2d3042;" onclick="onManualRefreshQr()">
+          <span>🔄 刷新二维码</span>
+        </button>
+      </div>
+
+      <!-- 复制链接功能 -->
+      <div class="copy-row">
+        <input type="text" id="qrUrlInput" class="form-input" readonly placeholder="等待生成连接串..." />
+        <button class="btn-cyan" id="copyUrlBtn" onclick="copyConnectUrl()">复制链接</button>
+      </div>
+      <div id="copyToast" style="display: none; font-size: 12px; color: var(--accent-cyan); text-align: center; margin-top: 8px;">
+        ✔ 已成功复制到剪贴板！
+      </div>
+
+      <div style="margin-top: 14px; font-size: 12px; color: var(--text-muted); text-align: center;" id="connectStatusTip">
+        正在连接服务端...
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 二级页面：暗色对话互动主页 ================= -->
+  <div class="view-screen" id="view-chat">
+    <!-- 顶部常驻导航栏 -->
+    <header class="chat-navbar">
+      <div class="chat-navbar-inner">
+        <div class="device-status-chip">
+          <div class="status-dot" id="chatStatusDot"></div>
+          <span id="chatStatusText">已连接</span>
+          <span class="channel-tag-inline a">A: <span id="navStrengthA">0</span></span>
+          <span class="channel-tag-inline b">B: <span id="navStrengthB">0</span></span>
+        </div>
+
+        <div class="nav-actions">
+          <!-- 常驻一键急停按钮 -->
+          <button class="panic-btn-mini" onclick="onPanicClick()" title="立即停止所有刺激">🚨 急停</button>
+          <!-- 打开设置与调试抽屉 -->
+          <button class="btn-icon-setting" onclick="openDrawer()" title="设置与调试">⚙️</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 消息对话流 -->
+    <main class="chat-messages" id="chatMessages"></main>
+
+    <!-- 底部输入框 (响应式防飘出底栏) -->
+    <footer class="chat-input-bar">
+      <div class="chat-input-inner">
+        <input type="text" id="chatInput" class="form-input-chat" placeholder="输入互动台词、动作或身体反应..." autocomplete="off" onkeydown="onInputKeydown(event)">
+        <button class="btn-send" id="chatSendBtn" onclick="sendChatMessage()">
+          <span>发送</span>
+          <svg class="send-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ================= 三级页面：设置与调试抽屉 ================= -->
+  <div class="drawer-overlay" id="drawerSettings" onclick="onOverlayClick(event)">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <span class="drawer-title">⚙️ 控制台设置与调试</span>
+        <button class="drawer-close-btn" onclick="closeDrawer()">✕</button>
+      </div>
+
+      <!-- 模块 0A：AI 角色人设与预设管理 (仅纯人设) -->
+      <div class="drawer-section">
+        <div class="section-label">AI 角色预设与设定 (纯人设)</div>
+        <div class="form-group">
+          <label class="form-label">角色风格预设</label>
+          <select class="form-select" id="settingPromptPreset" onchange="onPresetChange()">
+            <option value="succubus" selected>深渊魅魔（高傲·挑衅惩戒）</option>
+            <option value="android">仿生医生（冷淡·体征监测）</option>
+            <option value="catgirl">傲娇猫娘（调皮·口是心非）</option>
+            <option value="custom">✏️ 自定义设定 (上传MD/本地编辑)</option>
+          </select>
+        </div>
+        <!-- 自定义人设输入区域：默认隐藏且留空，仅在选中自定义模式时显示 -->
+        <div class="form-group" id="customPromptArea" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">自定义角色设定 Markdown</label>
+            <label class="btn-sm" style="cursor: pointer; padding: 4px 8px; font-size: 11px; background: #232738; border: 1px solid var(--border-color); border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+              📁 上传人设 MD
+              <input type="file" id="promptFileInput" accept=".md,.txt" style="display: none;" onchange="onUploadPromptMd(event)">
+            </label>
+          </div>
+          <textarea class="form-input" id="settingPromptText" rows="6" style="font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;" placeholder="在此输入自定义角色人设背景、台词风格与描写习惯..." oninput="onCustomPromptInput(event)"></textarea>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.3;">
+            💡 提示：此处仅需定义角色的性格台词、触碰偏好与背景。底层的郊狼硬件驱动指令与严格 JSON 输出格式由系统在后端自动组装注入。
+          </div>
+          <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <span id="promptAutoSaveStatus" style="font-size: 11px; color: #00d8b4; transition: opacity 0.3s; opacity: 0;">✓ 已自动保存</span>
+            <button class="btn-sm" style="background: var(--accent-cyan); color: #000; font-weight: 600; padding: 6px 14px;" onclick="saveCustomPrompt(true)">💾 保存自定义设定</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模块 0B：AI 模型与会话参数 -->
+      <div class="drawer-section">
+        <div class="section-label">AI 模型与会话参数</div>
+        <div class="form-group">
+          <label class="form-label">AI 模型选择</label>
+          <select class="form-select" id="settingModel">
+            <option value="gemini:gemini-3.8-flash" selected>Gemini-3.8-Flash</option>
+            <option value="gemini:gemini-3.6-flash">Gemini-3.6-Flash</option>
+            <option value="gemini:gemini-3.5-flash">Gemini-3.5-Flash</option>
+            <option value="gemini:gemini-flash-latest">Gemini-Flash-Latest</option>
+            <option value="gemini:gemini-pro-latest">Gemini-Pro-Latest</option>
+            <option value="deepseek:deepseek-flash">DeepSeek-Flash</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">玩家称呼 / 昵称</label>
+          <input type="text" class="form-input" id="settingNickname" value="小明" oninput="onProfileInput()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">设备部位映射</label>
+          <input type="text" class="form-input" id="settingMapping" value="A=大腿内侧、B=腰部" oninput="onProfileInput()">
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
+          <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="settingTts" style="accent-color: var(--accent-cyan);"> 启用语音朗读台词
+          </label>
+          <button class="btn-sm" onclick="clearChatHistory()" style="color: #ffb86c;">🧹 重置记忆</button>
+        </div>
+      </div>
+
+      <!-- 模块 1：双通道实时强度微调 -->
+      <div class="drawer-section">
+        <div class="section-label">
+          <span>双通道实时监控与调节</span>
+          <span id="drawerTargetTip" style="font-size: 11px; color: var(--accent-cyan);"></span>
+        </div>
+        <div class="channels-grid">
+          <!-- 通道 A -->
+          <div class="channel-box a">
+            <span style="font-size: 12px; color: var(--accent-cyan); font-weight: bold;">通道 A 强度</span>
+            <span class="strength-num" id="drawerStrengthA">0</span>
+            <span class="soft-limit-tag">APP软上限: <b id="drawerSoftLimitA">0</b></span>
+            <div class="ctrl-btn-group">
+              <button class="btn-sm" onclick="adjustStrength('A', 1)">+1</button>
+              <button class="btn-sm" onclick="adjustStrength('A', 5)">+5</button>
+              <button class="btn-sm" onclick="adjustStrength('A', -1)">-1</button>
+              <button class="btn-sm" onclick="adjustStrength('A', -5)">-5</button>
+              <button class="btn-sm btn-zero" onclick="setZero('A')">A 通道归零</button>
+            </div>
+          </div>
+
+          <!-- 通道 B -->
+          <div class="channel-box b">
+            <span style="font-size: 12px; color: var(--accent-pink); font-weight: bold;">通道 B 强度</span>
+            <span class="strength-num" id="drawerStrengthB">0</span>
+            <span class="soft-limit-tag">APP软上限: <b id="drawerSoftLimitB">0</b></span>
+            <div class="ctrl-btn-group">
+              <button class="btn-sm" onclick="adjustStrength('B', 1)">+1</button>
+              <button class="btn-sm" onclick="adjustStrength('B', 5)">+5</button>
+              <button class="btn-sm" onclick="adjustStrength('B', -1)">-1</button>
+              <button class="btn-sm" onclick="adjustStrength('B', -5)">-5</button>
+              <button class="btn-sm btn-zero" onclick="setZero('B')">B 通道归零</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模块 2：手动波形测试发生器 -->
+      <div class="drawer-section">
+        <div class="section-label">手动波形测试发生器</div>
+        <div class="form-group">
+          <label class="form-label">选择目标通道</label>
+          <select class="form-select" id="waveChannel">
+            <option value="A">通道 A</option>
+            <option value="B">通道 B</option>
+            <option value="AB">双通道同时 (A + B)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">预设波形模板</label>
+          <select class="form-select" id="wavePresetSelect">
+            <!-- 动态加载 waves.js -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">持续时间 (秒)</label>
+          <input type="number" class="form-input" id="waveDuration" value="3" min="1" max="30">
+        </div>
+        <button class="btn-pulse" onclick="sendTestWave()">⚡ 下发脉冲波形</button>
+      </div>
+
+      <!-- 模块 3：长期底层持续波形控制 -->
+      <div class="drawer-section">
+        <div class="section-label">长期底层持续波形</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">
+          低强度、长周期底色背景波形，可在对话中由 AI 自动驱动或手动控制
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px;">
+          <!-- 通道 A 底波 -->
+          <div style="display: flex; flex-direction: column; gap: 6px; background: #20222a; padding: 10px; border-radius: 10px; border: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-weight: 600; color: var(--accent-cyan); font-size: 13px;">通道 A 底波:</span>
+              <span id="bgWaveStatusA" style="font-size: 12px; color: #888;">未运行</span>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="btn-sm" onclick="controlBgWave('A', 'start', '呼吸', 3000)">启动呼吸</button>
+              <button class="btn-sm" onclick="controlBgWave('A', 'pause')">暂停</button>
+              <button class="btn-sm" onclick="controlBgWave('A', 'resume')">恢复</button>
+              <button class="btn-sm" onclick="controlBgWave('A', 'stop')" style="color: #ff334b;">关闭</button>
+            </div>
+          </div>
+          <!-- 通道 B 底波 -->
+          <div style="display: flex; flex-direction: column; gap: 6px; background: #20222a; padding: 10px; border-radius: 10px; border: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-weight: 600; color: var(--accent-pink); font-size: 13px;">通道 B 底波:</span>
+              <span id="bgWaveStatusB" style="font-size: 12px; color: #888;">未运行</span>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="btn-sm" onclick="controlBgWave('B', 'start', '潮汐', 3000)">启动潮汐</button>
+              <button class="btn-sm" onclick="controlBgWave('B', 'pause')">暂停</button>
+              <button class="btn-sm" onclick="controlBgWave('B', 'resume')">恢复</button>
+              <button class="btn-sm" onclick="controlBgWave('B', 'stop')" style="color: #ff334b;">关闭</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模块 4：连接与断开管理 -->
+      <div class="drawer-section">
+        <div class="section-label">连接状态与安全</div>
+        <button class="btn-danger-outline" onclick="disconnectAndReturn()">断开当前连接 / 重新配对</button>
+      </div>
+
+      <!-- 模块 4：终端事件日志 -->
+      <div class="drawer-section">
+        <div class="section-label">终端事件日志</div>
+        <div class="log-box" id="eventLog">
+          <div>[系统] 控制端初始化完成</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入依赖 -->
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/waves.js"></script>
+
+  <script>
+    let sdk;
+    let chatHistory = []; // 对话记忆历史
+    let isAiThinking = false;
+
+    // 视图切换控制
+    function showScreen(screenId) {
+      document.querySelectorAll('.view-screen').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(screenId);
+      if (target) target.classList.add('active');
+    }
+
+    // 抽屉开关
+    function openDrawer() {
+      document.getElementById('drawerSettings').classList.add('active');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawerSettings').classList.remove('active');
+    }
+
+    function onOverlayClick(e) {
+      if (e.target.id === 'drawerSettings') {
+        closeDrawer();
+      }
+    }
+
+    // 日志追加
+    function addLog(msg, color = null) {
+      const box = document.getElementById('eventLog');
+      if (!box) return;
+      const item = document.createElement('div');
+      const time = new Date().toLocaleTimeString();
+      item.innerText = `[${time}] ${msg}`;
+      if (color) item.style.color = color;
+      box.appendChild(item);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    // 格式化气泡文本：将括号动作描写显示为斜体灰色
+    function formatBubbleText(text) {
+      if (!text) return '';
+      const escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // 替换全角括号
+      let formatted = escaped.replace(/（([^）]+)）/g, '<span class="action-desc">（$1）</span>');
+      // 替换半角括号
+      formatted = formatted.replace(/\(([^)]+)\)/g, '<span class="action-desc">($1)</span>');
+
+      return formatted.replace(/\n/g, '<br>');
+    }
+
+    // 对话气泡追加
+    function appendChatMessage(sender, text) {
+      const container = document.getElementById('chatMessages');
+      const row = document.createElement('div');
+      row.className = `message-bubble-row ${sender}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `message-bubble ${sender}`;
+      bubble.innerHTML = formatBubbleText(text);
+
+      row.appendChild(bubble);
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function getOrCreateSessionId() {
+      let sid = localStorage.getItem('coyote_session_id');
+      if (!sid) {
+        sid = 'coyote_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+        localStorage.setItem('coyote_session_id', sid);
+      }
+      return sid;
+    }
+    const sessionId = getOrCreateSessionId();
+
+    // 清空历史记忆 (同步重置服务端存储)
+    async function clearChatHistory() {
+      if (!confirm('确认清空当前所有剧情记忆并重新开始？')) return;
+      try {
+        await fetch('/api/session/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid: sessionId })
+        });
+      } catch (e) {}
+      chatHistory = [];
+      const container = document.getElementById('chatMessages');
+      container.innerHTML = '';
+      addLog('已重置全部剧情与会话记忆', '#ffb86c');
+    }
+
+    // 发送聊天内容
+    function sendChatMessage() {
+      if (isAiThinking) return;
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendChatMessage('user', text);
+      input.value = '';
+
+      handleAiResponse(text);
+    }
+
+    function onInputKeydown(e) {
+      if (e.key === 'Enter') {
+        sendChatMessage();
+      }
+    }
+
+    // 调用后端真实 AI 接口并执行结构化动作
+    async function handleAiResponse(userText) {
+      isAiThinking = true;
+      const sendBtn = document.getElementById('chatSendBtn');
+      const input = document.getElementById('chatInput');
+      sendBtn.innerText = '响应中...';
+      sendBtn.disabled = true;
+      input.placeholder = '正在思考与感知……';
+
+      const rawModel = document.getElementById('settingModel')?.value || 'gemini:gemini-3.8-flash';
+      const [provider, model] = rawModel.split(':');
+      const nickname = document.getElementById('settingNickname')?.value || '小明';
+      const mapping = document.getElementById('settingMapping')?.value || 'A=大腿内侧、B=腰部';
+      const promptId = document.getElementById('settingPromptPreset')?.value || 'succubus';
+      // 预设模式下绝不输出自定义内容；仅在自定义模式时携带客户端固化或编辑的人设
+      const personaPrompt = promptId === 'custom'
+        ? (document.getElementById('settingPromptText')?.value || localStorage.getItem('coyote_custom_prompt') || '')
+        : '';
+      const sA = currentDeviceState?.channelA?.strength ?? 0;
+      const limitA = currentDeviceState?.channelA?.softLimit ?? 200;
+      const sB = currentDeviceState?.channelB?.strength ?? 0;
+      const limitB = currentDeviceState?.channelB?.softLimit ?? 200;
+
+      // 实时状态仅拼接在当前 user prompt 末尾，包含从设备获取的实时安全上限，历史轮次的状态原样保留
+      const stateSnippet = `\n\n【会话状态】称呼: ${nickname} | 映射: ${mapping} | A通道强度: ${sA} (当前安全上限 ${limitA}) | B通道强度: ${sB} (当前安全上限 ${limitB})`;
+      chatHistory.push({ role: 'user', content: userText + stateSnippet });
+      if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20); // 保留最新20轮
+
+      // 创建流式渲染占位气泡
+      const container = document.getElementById('chatMessages');
+      const row = document.createElement('div');
+      row.className = 'message-bubble-row ai';
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble ai';
+      bubble.innerHTML = '<span class="typing-cursor">▋</span>';
+      row.appendChild(bubble);
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+
+      let accumulatedText = '';
+      let doneReceived = false;
+
+      try {
+        const payload = {
+          sessionId,
+          provider,
+          model,
+          promptId,
+          systemPrompt: personaPrompt,
+          stream: true,
+          messages: chatHistory,
+          state: {
+            strengthA: currentDeviceState?.channelA?.strength ?? 0,
+            softLimitA: currentDeviceState?.channelA?.softLimit ?? 30,
+            strengthB: currentDeviceState?.channelB?.strength ?? 0,
+            softLimitB: currentDeviceState?.channelB?.softLimit ?? 30,
+            mapping,
+            nickname
+          }
+        };
+
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let sseBuffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop();
+
+          let currentEvent = 'message';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('event:')) {
+              currentEvent = trimmed.slice(6).trim();
+            } else if (trimmed.startsWith('data:')) {
+              const dataStr = trimmed.slice(5).trim();
+              try {
+                const dataObj = JSON.parse(dataStr);
+                if (currentEvent === 'chunk' && dataObj.text) {
+                  accumulatedText += dataObj.text;
+                  bubble.innerHTML = formatBubbleText(accumulatedText) + ' <span class="typing-cursor">▋</span>';
+                  container.scrollTop = container.scrollHeight;
+                } else if (currentEvent === 'done') {
+                  doneReceived = true;
+                  let finalLine = (dataObj.line || accumulatedText || '……').trim();
+                  // 气泡安全兜底：严禁裸露 JSON 数据展示在 UI 中
+                  if (finalLine.startsWith('{') || finalLine.startsWith('[') || finalLine.includes('"actions"')) {
+                    try {
+                      const maybeObj = JSON.parse(finalLine);
+                      finalLine = maybeObj.line || '（微弱的脉冲缓缓起伏传递……）嘘……我在呢。';
+                    } catch (e) {
+                      finalLine = '（微弱的脉冲缓缓起伏传递……）嘘……我在呢。';
+                    }
+                  }
+                  bubble.innerHTML = formatBubbleText(finalLine);
+                  chatHistory.push({
+                    role: 'assistant',
+                    content: JSON.stringify({ line: finalLine, actions: dataObj.actions || [] })
+                  });
+                  if (document.getElementById('settingTts')?.checked) {
+                    speakSpeech(finalLine);
+                  }
+                  executeAiActions(dataObj.actions || []);
+                } else if (currentEvent === 'error') {
+                  throw new Error(dataObj.error || 'AI 返回错误');
+                }
+              } catch (e) {
+                if (e.message !== 'Unexpected end of JSON input') console.warn(e);
+              }
+            }
+          }
+        }
+
+        if (!doneReceived && accumulatedText) {
+          bubble.innerHTML = formatBubbleText(accumulatedText);
+          chatHistory.push({
+            role: 'assistant',
+            content: JSON.stringify({ line: accumulatedText, actions: [] })
+          });
+        }
+      } catch (err) {
+        bubble.innerHTML = `[网络/连接异常] ${err.message}`;
+        addLog(`AI 交互失败: ${err.message}`, '#ff334b');
+      } finally {
+        isAiThinking = false;
+        sendBtn.innerText = '发送';
+        sendBtn.disabled = false;
+        input.placeholder = '输入互动台词、动作或反应...';
+        input.focus();
+      }
+    }
+
+    // 语音朗读功能
+    function speakSpeech(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      // 过滤掉半角和全角括号中的动作描写，只留台词
+      const spoken = text.replace(/（[^）]*）|\([^\)]*\)/g, '').trim();
+      if (!spoken) return;
+
+      const utterance = new SpeechSynthesisUtterance(spoken);
+      utterance.lang = 'zh-CN';
+      utterance.rate = 0.95; // 稍慢一些更有呢喃感
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 记录 AI 下发的动作指令日志 (硬件已由服务端 Hub 直接调度执行)
+    function executeAiActions(actions) {
+      if (!Array.isArray(actions) || actions.length === 0) return;
+
+      actions.forEach((act, idx) => {
+        setTimeout(() => {
+          const op = act.op;
+          const ch = act.channel || 'A';
+
+          switch (op) {
+            case 'hold_strength':
+              if (typeof act.value === 'number') {
+                addLog(`[AI动作] 设强度: 通道 ${ch} -> ${act.value}`, '#00d8b4');
+              }
+              break;
+
+            case 'add_strength':
+              if (typeof act.delta === 'number') {
+                addLog(`[AI动作] 微调: 通道 ${ch} ${act.delta > 0 ? '+' + act.delta : act.delta}`, '#00d8b4');
+              }
+              break;
+
+            case 'pulse':
+              if (act.pattern) {
+                const dur = act.duration_s || 3;
+                const desc = Array.isArray(act.pattern) ? `[AI自主合成波形 ${act.pattern.length}帧]` : `[${act.pattern}]`;
+                addLog(`[AI动作] 脉冲: 通道 ${ch} ${desc} ${dur}s`, '#00d8b4');
+              }
+              break;
+
+            case 'custom_pulse':
+              const waveData = act.waves || act.pattern;
+              if (waveData) {
+                const dur = act.duration_s || 3;
+                const count = Array.isArray(waveData) ? waveData.length : 1;
+                addLog(`[AI动作] ✨ 自主合成波形: 通道 ${ch} [${count} 帧] ${dur}s`, '#ff2a70');
+              }
+              break;
+
+            case 'pulse_hold':
+              if (act.pattern) {
+                const desc = Array.isArray(act.pattern) ? `[AI自主合成持续波形]` : `[${act.pattern}]`;
+                addLog(`[AI动作] 持续波形: 通道 ${ch} ${desc}`, '#00d8b4');
+              }
+              break;
+
+            case 'bg_wave_start':
+              if (act.pattern) {
+                const desc = Array.isArray(act.pattern) ? `[AI自主合成底层波形]` : `[${act.pattern}]`;
+                addLog(`[AI动作] 启动长期底层波形: 通道 ${ch} ${desc}`, '#00d8b4');
+              }
+              break;
+
+            case 'bg_wave_pause':
+              addLog(`[AI动作] 暂停长期底层波形: 通道 ${ch}`, '#ffb86c');
+              break;
+
+            case 'bg_wave_resume':
+              addLog(`[AI动作] 恢复长期底层波形: 通道 ${ch}`, '#00d8b4');
+              break;
+
+            case 'bg_wave_stop':
+              addLog(`[AI动作] 停止长期底层波形: 通道 ${ch}`, '#ff334b');
+              break;
+
+            case 'temp_strength':
+              if (typeof act.value === 'number') {
+                const dur = act.duration_s || 3;
+                addLog(`[AI动作] 短暂爆发: 通道 ${ch} -> ${act.value} (${dur}s)`, '#ffb86c');
+              }
+              break;
+
+            case 'clear':
+              addLog(`[AI动作] 清空通道 ${ch}`, '#ff334b');
+              break;
+
+            case 'stop':
+              addLog(`[AI动作] 全部停止与归零`, '#ff334b');
+              break;
+
+            default:
+              console.warn('[AI] 未知动作:', act);
+          }
+        }, idx * 250);
+      });
+    }
+
+    // 初始化波形预设选项
+    function initWaveOptions() {
+      const select = document.getElementById('wavePresetSelect');
+      select.innerHTML = '';
+      if (typeof COYOTE_WAVES !== 'undefined') {
+        Object.keys(COYOTE_WAVES).forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.innerText = name;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    // ================= 服务端设备状态机客户端 =================
+    let currentDeviceState = {
+      paired: false,
+      controllerId: '',
+      targetId: null,
+      qrText: '',
+      channelA: { strength: 0, softLimit: 200 },
+      channelB: { strength: 0, softLimit: 200 },
+      bgWaves: { A: { state: 'stopped' }, B: { state: 'stopped' } }
+    };
+
+    let qrCodeInstance = null;
+
+    function renderQrCode(url) {
+      const box = document.getElementById('qrcodeBox');
+      const input = document.getElementById('qrUrlInput');
+      if (input && url) input.value = url;
+      if (!box) return;
+
+      if (!url) {
+        box.innerHTML = '<div style="color: #888; font-size: 13px;">等待服务端分配配对码...</div>';
+        return;
+      }
+
+      box.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        qrCodeInstance = new QRCode(box, {
+          text: url,
+          width: 180,
+          height: 180,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } else {
+        box.innerText = url;
+      }
+    }
+
+    function updateBgWaveUI(channel, bgData) {
+      const el = document.getElementById(`bgWaveStatus${channel}`);
+      if (!el || !bgData) return;
+      if (bgData.state === 'running') {
+        el.innerText = `运行中 (${bgData.pattern || '底色'})`;
+        el.style.color = '#00d8b4';
+      } else if (bgData.state === 'paused') {
+        el.innerText = '已暂停';
+        el.style.color = '#ffb86c';
+      } else {
+        el.innerText = '未运行';
+        el.style.color = '#888';
+      }
+    }
+
+    function updateUIFromState(state) {
+      if (!state) return;
+      currentDeviceState = Object.assign(currentDeviceState, state);
+
+      const navA = document.getElementById('navStrengthA');
+      const navB = document.getElementById('navStrengthB');
+      const drA = document.getElementById('drawerStrengthA');
+      const drB = document.getElementById('drawerStrengthB');
+      const limA = document.getElementById('drawerSoftLimitA');
+      const limB = document.getElementById('drawerSoftLimitB');
+
+      if (navA) navA.innerText = currentDeviceState.channelA?.strength ?? 0;
+      if (navB) navB.innerText = currentDeviceState.channelB?.strength ?? 0;
+      if (drA) drA.innerText = currentDeviceState.channelA?.strength ?? 0;
+      if (drB) drB.innerText = currentDeviceState.channelB?.strength ?? 0;
+      if (limA) limA.innerText = currentDeviceState.channelA?.softLimit ?? 200;
+      if (limB) limB.innerText = currentDeviceState.channelB?.softLimit ?? 200;
+
+      updateBgWaveUI('A', currentDeviceState.bgWaves?.A);
+      updateBgWaveUI('B', currentDeviceState.bgWaves?.B);
+
+      const proto = (currentDeviceState.protocol || 'v4').toUpperCase();
+      const v4Btn = document.getElementById('protoV4Btn');
+      const v3Btn = document.getElementById('protoV3Btn');
+      if (proto === 'V4') {
+        v4Btn?.classList.add('active');
+        v3Btn?.classList.remove('active');
+      } else {
+        v4Btn?.classList.remove('active');
+        v3Btn?.classList.add('active');
+      }
+
+      const chatStatusText = document.getElementById('chatStatusText');
+      const drawerTargetTip = document.getElementById('drawerTargetTip');
+      const connectStatusTip = document.getElementById('connectStatusTip');
+
+      if (currentDeviceState.paired) {
+        if (chatStatusText) chatStatusText.innerText = `已连接 (${proto})`;
+        if (drawerTargetTip) drawerTargetTip.innerText = `目标: ${String(currentDeviceState.targetId || '').slice(0, 8)}...`;
+        showScreen('view-chat');
+      } else {
+        if (connectStatusTip) connectStatusTip.innerText = `等待扫码连接 (${proto})`;
+        if (currentDeviceState.qrText) {
+          renderQrCode(currentDeviceState.qrText);
+        }
+        showScreen('view-connect');
+      }
+    }
+
+    // 协议切换 (V4 / V3)
+    async function switchProto(version) {
+      const v = version === 'v3' ? 'v3' : 'v4';
+      const v4Btn = document.getElementById('protoV4Btn');
+      const v3Btn = document.getElementById('protoV3Btn');
+      if (v === 'v4') {
+        v4Btn?.classList.add('active');
+        v3Btn?.classList.remove('active');
+      } else {
+        v4Btn?.classList.remove('active');
+        v3Btn?.classList.add('active');
+      }
+
+      addLog(`切换协议至 ${v.toUpperCase()}...`);
+      await sendDeviceAction({ op: 'set_protocol', protocol: v });
+    }
+
+    // 从服务端获取设备初始状态
+    async function fetchDeviceState() {
+      try {
+        const res = await fetch('/api/device/state');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.data) {
+            updateUIFromState(json.data);
+            addLog(`服务端状态已同步 (${json.data.paired ? '已连接' : '等待扫码'})`);
+          }
+        }
+      } catch (err) {
+        console.warn('获取服务端设备状态失败:', err.message);
+      }
+    }
+
+    // 连接服务端 SSE 实时设备事件流
+    function connectDeviceSSE() {
+      const sse = new EventSource('/api/device/events');
+
+      sse.addEventListener('state', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateUIFromState(data);
+        } catch (err) {}
+      });
+
+      sse.addEventListener('paired', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          const proto = (data.protocol || currentDeviceState.protocol || 'v4').toUpperCase();
+          addLog(`[${proto}] 配对成功! 正在自动刷新页面...`, '#00d8b4');
+        } catch (err) {}
+        // 服务端确认连接成功后自动刷新！
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      });
+
+      sse.addEventListener('protocol_change', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          currentDeviceState.protocol = data.protocol;
+          currentDeviceState.qrText = data.qrText;
+          updateUIFromState(currentDeviceState);
+        } catch (err) {}
+      });
+
+      sse.addEventListener('disconnected', () => {
+        addLog('手机端 APP 已断开连接', '#ff334b');
+        closeDrawer();
+        fetchDeviceState();
+      });
+
+      sse.addEventListener('strength_update', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.channelA) currentDeviceState.channelA = data.channelA;
+          if (data.channelB) currentDeviceState.channelB = data.channelB;
+
+          const navA = document.getElementById('navStrengthA');
+          const navB = document.getElementById('navStrengthB');
+          const drA = document.getElementById('drawerStrengthA');
+          const drB = document.getElementById('drawerStrengthB');
+          const limA = document.getElementById('drawerSoftLimitA');
+          const limB = document.getElementById('drawerSoftLimitB');
+
+          if (navA) navA.innerText = currentDeviceState.channelA.strength;
+          if (navB) navB.innerText = currentDeviceState.channelB.strength;
+          if (drA) drA.innerText = currentDeviceState.channelA.strength;
+          if (drB) drB.innerText = currentDeviceState.channelB.strength;
+          if (limA) limA.innerText = currentDeviceState.channelA.softLimit;
+          if (limB) limB.innerText = currentDeviceState.channelB.softLimit;
+        } catch (err) {}
+      });
+
+      sse.addEventListener('bg_wave_update', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.channel) {
+            currentDeviceState.bgWaves[data.channel] = data;
+            updateBgWaveUI(data.channel, data);
+          }
+        } catch (err) {}
+      });
+
+      sse.addEventListener('qr_update', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          currentDeviceState.qrText = data.qrText;
+          renderQrCode(data.qrText);
+          addLog('服务端已生成新配对二维码', '#00d8b4');
+        } catch (err) {}
+      });
+
+      sse.addEventListener('button_feedback', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          addLog(`收到 APP 按钮反馈: 通道 ${data.channel} [按键 ${data.symbolIndex}]`, '#ffb86c');
+        } catch (err) {}
+      });
+
+      sse.addEventListener('emergency_stop', () => {
+        addLog('🚨 一键急停已触发！强度归零并清空全部任务！', '#ff334b');
+        appendChatMessage('ai', '🚨 [急停警告] 已触发紧急制动！双通道强度已强制归零，波形任务已全部清空。');
+      });
+
+      sse.onerror = () => {
+        console.warn('SSE 连接异常，等待自动重试...');
+      };
+    }
+
+    // 向服务端下发硬件指令
+    async function sendDeviceAction(actionPayload) {
+      try {
+        const res = await fetch('/api/device/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(actionPayload)
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.state) {
+            updateUIFromState(json.state);
+          }
+          return json;
+        }
+      } catch (err) {
+        addLog(`下发控制失败: ${err.message}`, '#ff334b');
+      }
+    }
+
+    // 角色预设与人设 MD 管理逻辑 (支持浏览器本地缓存固化与预设隔离)
+    async function loadPromptPresets() {
+      const customArea = document.getElementById('customPromptArea');
+      const textarea = document.getElementById('settingPromptText');
+      const sel = document.getElementById('settingPromptPreset');
+
+      try {
+        const res = await fetch('/api/prompts');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && Array.isArray(json.data)) {
+            if (sel) {
+              sel.innerHTML = json.data.map(p => `<option value="${p.id}">${p.name}</option>`).join('') +
+                '<option value="custom">✏️ 自定义设定 (上传MD/本地编辑)</option>';
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('获取角色预设列表失败:', e);
+      }
+
+      // 读取浏览器本地固化的人设选择（默认 succubus）
+      const cachedPromptId = localStorage.getItem('coyote_prompt_id') || 'succubus';
+      if (sel) sel.value = cachedPromptId;
+
+      if (cachedPromptId === 'custom') {
+        if (customArea) customArea.style.display = 'block';
+        if (textarea) textarea.value = localStorage.getItem('coyote_custom_prompt') || '';
+      } else {
+        if (customArea) customArea.style.display = 'none';
+        if (textarea) textarea.value = '';
+      }
+    }
+
+    async function onPresetChange() {
+      const sel = document.getElementById('settingPromptPreset');
+      const customArea = document.getElementById('customPromptArea');
+      const textarea = document.getElementById('settingPromptText');
+      const pid = sel?.value;
+      if (!pid) return;
+
+      localStorage.setItem('coyote_prompt_id', pid);
+
+      if (pid === 'custom') {
+        if (customArea) customArea.style.display = 'block';
+        const savedCustom = localStorage.getItem('coyote_custom_prompt') || '';
+        if (textarea) {
+          textarea.value = savedCustom;
+          textarea.focus();
+        }
+        await syncPromptConfig('custom', savedCustom);
+        addLog('已切换至自定义人设模式', '#00d8b4');
+        return;
+      }
+
+      // 切换为官方预设时：自定义输入区域隐藏、清空输入框，且绝不输出自定义内容
+      if (customArea) customArea.style.display = 'none';
+      if (textarea) textarea.value = '';
+
+      try {
+        await syncPromptConfig(pid, '');
+        addLog(`已切换角色预设: [${pid}]`, '#00d8b4');
+      } catch (e) {
+        addLog(`切换角色预设失败: ${e.message}`, '#ff334b');
+      }
+    }
+
+    // 双通道人设同步：优先 /api/prompt/custom，自动平滑降级兼容 /api/session/profile
+    async function syncPromptConfig(pid, promptText = '') {
+      try {
+        const res = await fetch('/api/prompt/custom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid: sessionId, promptId: pid, prompt: promptText })
+        });
+        if (res.ok) return true;
+      } catch (e) {}
+
+      try {
+        const fbRes = await fetch('/api/session/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid: sessionId, promptId: pid, customPrompt: promptText })
+        });
+        return fbRes.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function onUploadPromptMd(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const text = e.target.result || '';
+        const customArea = document.getElementById('customPromptArea');
+        const textarea = document.getElementById('settingPromptText');
+        const sel = document.getElementById('settingPromptPreset');
+        if (sel) sel.value = 'custom';
+        if (customArea) customArea.style.display = 'block';
+        if (textarea) textarea.value = text;
+
+        localStorage.setItem('coyote_custom_prompt', text);
+        localStorage.setItem('coyote_prompt_id', 'custom');
+
+        await saveCustomPrompt(true);
+        addLog(`成功上传并固化自定义角色设定 MD: ${file.name}`, '#00d8b4');
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    let customPromptSaveSeq = 0;
+    let customPromptDebounceTimer = null;
+    let profileDebounceTimer = null;
+
+    // input 事件触发保存自定义人设 (客户端即时固化 + 服务端防抖自动保存)
+    function onCustomPromptInput(event) {
+      const text = event?.target ? event.target.value : (document.getElementById('settingPromptText')?.value || '');
+
+      // 1. 实时更新并固化至客户端浏览器本地缓存
+      localStorage.setItem('coyote_custom_prompt', text);
+      localStorage.setItem('coyote_prompt_id', 'custom');
+
+      const statusEl = document.getElementById('promptAutoSaveStatus');
+      if (statusEl) {
+        statusEl.innerText = '保存中...';
+        statusEl.style.color = '#ffb86c';
+        statusEl.style.opacity = '1';
+      }
+
+      // 2. 防抖自动向服务端同步保存 (350ms)
+      if (customPromptDebounceTimer) clearTimeout(customPromptDebounceTimer);
+      customPromptDebounceTimer = setTimeout(() => {
+        triggerSaveCustomPrompt(text, false);
+      }, 350);
+    }
+
+    async function triggerSaveCustomPrompt(text, isManual = false) {
+      if (customPromptDebounceTimer) {
+        clearTimeout(customPromptDebounceTimer);
+        customPromptDebounceTimer = null;
+      }
+
+      const textarea = document.getElementById('settingPromptText');
+      const val = typeof text === 'string' ? text : (textarea?.value || '');
+      const sel = document.getElementById('settingPromptPreset');
+      if (sel) sel.value = 'custom';
+      const customArea = document.getElementById('customPromptArea');
+      if (customArea) customArea.style.display = 'block';
+
+      // 客户端本地缓存立即持久化
+      localStorage.setItem('coyote_custom_prompt', val);
+      localStorage.setItem('coyote_prompt_id', 'custom');
+
+      const thisSeq = ++customPromptSaveSeq;
+      const statusEl = document.getElementById('promptAutoSaveStatus');
+      if (statusEl && isManual) {
+        statusEl.innerText = '保存中...';
+        statusEl.style.color = '#ffb86c';
+        statusEl.style.opacity = '1';
+      }
+
+      const ok = await syncPromptConfig('custom', val);
+
+      // 若有较新的保存请求正在处理或已完成，则放弃过期的异步更新，杜绝竞态冲突
+      if (thisSeq !== customPromptSaveSeq) {
+        return;
+      }
+
+      if (ok) {
+        if (statusEl) {
+          statusEl.innerText = isManual ? '✓ 设定已手动保存' : '✓ 实时输入已自动保存';
+          statusEl.style.color = '#00d8b4';
+          statusEl.style.opacity = '1';
+          setTimeout(() => {
+            if (thisSeq === customPromptSaveSeq && statusEl && statusEl.innerText.includes('已')) {
+              statusEl.style.opacity = '0';
+            }
+          }, 2000);
+        }
+        if (isManual) {
+          addLog('已手动保存自定义设定并同步生效', '#00d8b4');
+        }
+      } else {
+        // 服务端异常时本地缓存依然成功，诚实告知，杜绝“保存失败但实际保存成功”的左右脑互搏
+        if (statusEl) {
+          statusEl.innerText = '✓ 本地已保存 (服务端同步暂缓)';
+          statusEl.style.color = '#00d8b4';
+          statusEl.style.opacity = '1';
+          setTimeout(() => {
+            if (thisSeq === customPromptSaveSeq && statusEl) {
+              statusEl.style.opacity = '0';
+            }
+          }, 2500);
+        }
+        if (isManual) {
+          addLog('自定义设定已保存至本地缓存', '#00d8b4');
+        }
+      }
+    }
+
+    async function saveCustomPrompt(isManual = true) {
+      if (customPromptDebounceTimer) clearTimeout(customPromptDebounceTimer);
+      const text = document.getElementById('settingPromptText')?.value || '';
+      return triggerSaveCustomPrompt(text, isManual);
+    }
+
+    function onProfileInput() {
+      const nickname = document.getElementById('settingNickname')?.value || '';
+      const mapping = document.getElementById('settingMapping')?.value || '';
+      localStorage.setItem('coyote_nickname', nickname);
+      localStorage.setItem('coyote_mapping', mapping);
+
+      if (profileDebounceTimer) clearTimeout(profileDebounceTimer);
+      profileDebounceTimer = setTimeout(syncSessionProfile, 350);
+    }
+
+    function syncSessionProfile() {
+      const nickname = document.getElementById('settingNickname')?.value || '';
+      const mapping = document.getElementById('settingMapping')?.value || '';
+      const model = document.getElementById('settingModel')?.value || '';
+      localStorage.setItem('coyote_nickname', nickname);
+      localStorage.setItem('coyote_mapping', mapping);
+      if (model) localStorage.setItem('coyote_model', model);
+
+      fetch('/api/session/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sid: sessionId, nickname, mapping, model })
+      }).catch(err => console.warn('同步会话设置失败:', err));
+    }
+
+    // 页面启动逻辑
+    async function init() {
+      initWaveOptions();
+      await loadPromptPresets();
+
+      // 优先从浏览器本地缓存恢复昵称、映射与模型（保障刷新不丢失）
+      const cachedNick = localStorage.getItem('coyote_nickname');
+      const cachedMap = localStorage.getItem('coyote_mapping');
+      const cachedMod = localStorage.getItem('coyote_model');
+      if (cachedNick && document.getElementById('settingNickname')) document.getElementById('settingNickname').value = cachedNick;
+      if (cachedMap && document.getElementById('settingMapping')) document.getElementById('settingMapping').value = cachedMap;
+      if (cachedMod && document.getElementById('settingModel')) document.getElementById('settingModel').value = cachedMod;
+
+      // 从服务端恢复历史会话记忆与设置
+      try {
+        const sRes = await fetch(`/api/session?sid=${sessionId}`);
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          if (sData.ok && sData.data) {
+            const session = sData.data;
+            if (session.nickname && !cachedNick) document.getElementById('settingNickname').value = session.nickname;
+            if (session.mapping && !cachedMap) document.getElementById('settingMapping').value = session.mapping;
+            if (session.model && !cachedMod) {
+              const sel = document.getElementById('settingModel');
+              if (sel) sel.value = session.model;
+            }
+
+            // 角色人设恢复（客户端本地缓存优先，保障浏览器固化）
+            const cachedPid = localStorage.getItem('coyote_prompt_id') || session.promptId || 'succubus';
+            const pSel = document.getElementById('settingPromptPreset');
+            const customArea = document.getElementById('customPromptArea');
+            const pText = document.getElementById('settingPromptText');
+
+            if (pSel) pSel.value = cachedPid;
+            if (cachedPid === 'custom') {
+              if (customArea) customArea.style.display = 'block';
+              if (pText) pText.value = localStorage.getItem('coyote_custom_prompt') || session.customPrompt || '';
+            } else {
+              if (customArea) customArea.style.display = 'none';
+              if (pText) pText.value = '';
+            }
+
+            if (Array.isArray(session.displayMessages) && session.displayMessages.length > 0) {
+              const container = document.getElementById('chatMessages');
+              container.innerHTML = '';
+              session.displayMessages.forEach(m => {
+                appendChatMessage(m.sender, m.text);
+              });
+              chatHistory = session.history || [];
+              addLog(`[剧情已恢复] 成功载入 ${session.displayMessages.length} 条历史对话`, '#00d8b4');
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('恢复会话记忆失败:', e.message);
+      }
+
+      // 绑定输入与变更事件（双重保障：HTML inline + JS 事件监听）
+      document.getElementById('settingNickname')?.addEventListener('input', onProfileInput);
+      document.getElementById('settingMapping')?.addEventListener('input', onProfileInput);
+      document.getElementById('settingModel')?.addEventListener('change', syncSessionProfile);
+      document.getElementById('settingPromptText')?.addEventListener('input', onCustomPromptInput);
+
+      // 获取服务端状态并启动 SSE 实时流
+      await fetchDeviceState();
+      connectDeviceEvents();
+    }
+
+    // 复制连接串
+    function copyConnectUrl() {
+      const input = document.getElementById('qrUrlInput');
+      if (!input || !input.value) return;
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(() => {
+          showCopySuccess();
+        }).catch(() => fallbackCopy(input));
+      } else {
+        fallbackCopy(input);
+      }
+    }
+
+    function fallbackCopy(input) {
+      input.select();
+      input.setSelectionRange(0, 99999);
+      try {
+        document.execCommand('copy');
+        showCopySuccess();
+      } catch (err) {
+        alert('复制失败，请手动长按选中文本复制');
+      }
+    }
+
+    function showCopySuccess() {
+      const toast = document.getElementById('copyToast');
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2500);
+      addLog('已复制配对链接到剪贴板！', '#00d8b4');
+    }
+
+    // 交互操作
+    function onPanicClick() {
+      sendDeviceAction({ op: 'panic' });
+    }
+
+    function adjustStrength(channel, delta) {
+      sendDeviceAction({ op: 'adjust', channel, delta });
+      addLog(`微调通道 ${channel}: ${delta > 0 ? '+' + delta : delta}`);
+    }
+
+    function setZero(channel) {
+      sendDeviceAction({ op: 'zero', channel });
+      addLog(`通道 ${channel} 归零清空`);
+    }
+
+    function sendTestWave() {
+      const ch = document.getElementById('waveChannel').value;
+      const waveName = document.getElementById('wavePresetSelect').value;
+      const dur = parseInt(document.getElementById('waveDuration').value, 10) || 3;
+
+      sendDeviceAction({ op: 'pulse', channel: ch, pattern: waveName, duration: dur });
+      addLog(`通道 ${ch} 触发波形: [${waveName}] ${dur}s`);
+    }
+
+    function controlBgWave(channel, subOp, pattern = '呼吸', intervalMs = 3000) {
+      sendDeviceAction({
+        op: 'bg_wave',
+        subOp,
+        channel,
+        pattern,
+        intervalMs
+      });
+    }
+
+    function onManualRefreshQr() {
+      addLog('手动请求刷新二维码与配对 ID...', '#00d8b4');
+      sendDeviceAction({ op: 'regenerate_qr' });
+    }
+
+    function disconnectAndReturn() {
+      if (confirm('确认断开当前连接并返回配对页面？')) {
+        closeDrawer();
+        sendDeviceAction({ op: 'disconnect' });
+        showScreen('view-connect');
+      }
+    }
+
+    // 移动端软键盘呼出时自适应贴合与防遮挡
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        const container = document.getElementById('chatMessages');
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+    }
+
+    const chatInputElem = document.getElementById('chatInput');
+    if (chatInputElem) {
+      chatInputElem.addEventListener('focus', () => {
+        setTimeout(() => {
+          const container = document.getElementById('chatMessages');
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        }, 260);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

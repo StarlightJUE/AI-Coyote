@@ -1,0 +1,15 @@
+{
+  "name": "coyote-ai-server",
+  "version": "1.0.0",
+  "description": "DG-Lab Coyote 3.0 WSS & HTTPS Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "acme-client": "^5.4.0",
+    "dglab-kit": "^1.0.5",
+    "undici": "^8.11.2",
+    "ws": "^8.18.0"
+  }
+}
